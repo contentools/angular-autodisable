@@ -25,7 +25,10 @@ module.exports = function(config) {
 			angular,
 			angularMocks,
 			es5Shim,
-			'src/**/*'
+			'src/autodisable.module.js',
+			'src/autodisable.directive.js',
+			'src/autodisable.factory.js',
+			'src/*.spec.js'
 		],
 
 

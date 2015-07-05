@@ -2,9 +2,6 @@
 (function(module) {
 	'use strict';
 
-	var CLS_LOCKED = 'autodisable-locked',
-		CLS_UNLOCKED = 'autodisable-unlocked'
-
 	/**
 	 * @directive [autodisable]
 	 * @example
@@ -28,4 +25,4 @@
 
 	module.directive('autodisable', autodisableDirective);
 
-})(angular.module('angular-autodisable', []));
+})(angular.module('angular-autodisable'));
