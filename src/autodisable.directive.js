@@ -23,6 +23,6 @@
 		}
 	}
 
-	module.directive('autodisable', autodisableDirective);
+	module.directive('autodisable', ['AutoDisable', autodisableDirective]);
 
 })(angular.module('angular-autodisable'));

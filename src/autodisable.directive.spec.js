@@ -6,37 +6,74 @@ describe('autodisable directive', function() {
 
 	var compile, flush;
 
-	beforeEach(inject(function ($rootScope, $compile) {
-		compile = function (template) {
+	beforeEach(inject(function($rootScope, $compile) {
+		compile = function(template) {
 			var el = $compile(template)($rootScope);
 			$rootScope.$digest();
 
 			return el;
 		};
 
-		flush = function () {
+		flush = function() {
 			$rootScope.$digest();
 		};
 	}));
 
 	describe('disable form submission if there is a promise waiting in the submit event handler', function() {
-		it('should not fire the handler twice while the promise is waiting', inject(function ($rootScope, $q) {
-			var template = '<form autodisable ng-submit="onsubmit()"></form>',
+		it('should not fire the handler twice while the promise is waiting', inject(function($rootScope, $q) {
+			var template = '<form autodisable ng-submit="onsubmit()">' +
+				'<input type="text" autodisable ng-model="foo" />' +
+				'<button type="submit" autodisable>OK</button>' +
+				'</form>',
+
+				count = 0,
 				element = compile(template),
 				deferred = $q.defer(),
-				count = 0,
-				form = element.data('$formController');
+				form = element.data('$formController'),
+				button = element.find('button'),
+				input = element.find('input');
 
-			form.$setDirty();
-			flush();
+			expect(count).toBe(0);
 
-			$rootScope.onsubmit = function () {
+			// autolock
+			expect(element.hasClass('autodisable')).toBe(true);
+			expect(element.hasClass('autodisable-locked')).toBe(true);
+			expect(element.hasClass('autodisable-busy')).toBe(false);
+
+			// auto lock children on startup
+			expect(button.attr('disabled')).toBe('disabled');
+			expect(button.hasClass('autodisable-locked')).toBe(true);
+			expect(button.hasClass('autodisable-busy')).toBe(false);
+
+			expect(input.attr('disabled')).not.toBe('disabled');
+			expect(input.hasClass('autodisable-locked')).toBe(true);
+			expect(input.hasClass('autodisable-busy')).toBe(false);
+
+
+			$rootScope.onsubmit = function() {
 				count++;
 				return deferred.promise;
 			};
 
+			form.$setDirty();
+			flush();
+
 			element.triggerHandler('submit');
 			expect(count).toBe(1);
+
+			expect(element.hasClass('autodisable')).toBe(true);
+			expect(element.hasClass('autodisable-locked')).toBe(true);
+			expect(element.hasClass('autodisable-busy')).toBe(true);
+
+			// auto locked on submit
+			expect(button.attr('disabled')).toBe('disabled');
+			expect(button.hasClass('autodisable-locked')).toBe(true);
+			expect(button.hasClass('autodisable-busy')).toBe(true);
+
+			// inputs are locked as well
+			expect(input.attr('disabled')).toBe('disabled');
+			expect(input.hasClass('autodisable-locked')).toBe(true);
+			expect(input.hasClass('autodisable-busy')).toBe(true);
 
 			element.triggerHandler('submit');
 			expect(count).toBe(1);
@@ -44,16 +81,29 @@ describe('autodisable directive', function() {
 			deferred.resolve();
 			flush();
 
+			expect(element.hasClass('autodisable')).toBe(true);
+			expect(element.hasClass('autodisable-locked')).toBe(false);
+
+			// unlocked when the submission ends
+			expect(button.attr('disabled')).not.toBe('disabled');
+			expect(button.hasClass('autodisable-locked')).toBe(false);
+			expect(button.hasClass('autodisable-busy')).toBe(false);
+
+			// inputs are unlocked as well
+			expect(input.attr('disabled')).not.toBe('disabled');
+			expect(input.hasClass('autodisable-locked')).toBe(false);
+			expect(input.hasClass('autodisable-busy')).toBe(false);
+
 			element.triggerHandler('submit');
 			expect(count).toBe(2);
 		}));
 
-		it('should autolock if the form is invalid or pristine', inject(function ($rootScope) {
+		it('should autolock if the form is invalid or pristine', inject(function($rootScope) {
 			var template = '<form autodisable ng-submit="onsubmit()"></form>',
 				element = compile(template),
 				count = 0;
 
-			$rootScope.onsubmit = function () {
+			$rootScope.onsubmit = function() {
 				count++;
 			};
 
@@ -61,23 +111,33 @@ describe('autodisable directive', function() {
 			expect(count).toBe(0);
 		}));
 
-		it('should lock the child nodes when the parent is locked', inject(function () {
-			var template = '<form autodisable ng-submit="onsubmit()">'+
-				'<input type="text" autodisable ng-model="foo" />'+
-				'<button type="submit" autodisable>OK</button>'+
+		it('should lock the child nodes when the parent is locked', inject(function() {
+			var template = '<form autodisable ng-submit="onsubmit()">' +
+				'<input type="text" autodisable ng-model="foo" />' +
+				'<button type="submit" autodisable>OK</button>' +
 				'</form>',
 
 				element = compile(template);
 
+			var button = element.find('button'),
+				input = element.find('input');
+
 			// auto locked due to form state being pristine
-			expect(element.find('button').attr('disabled')).toBe('disabled');
-			expect(element.find('input').attr('disabled')).toBe('disabled');
+			expect(button.attr('disabled')).toBe('disabled');
+			expect(button.hasClass('autodisable-locked')).toBe(true);
+			expect(button.hasClass('autodisable-busy')).toBe(false);
+
+			// has the class but won't be disabled, otherwise the form
+			// would be unusable
+			expect(input.attr('disabled')).not.toBe('disabled');
+			expect(input.hasClass('autodisable-locked')).toBe(true);
+			expect(input.hasClass('autodisable-busy')).toBe(false);
 		}));
 
-		it('should unlock the child nodes when the parent is unlocked', inject(function () {
-			var template = '<form autodisable ng-submit="onsubmit()">'+
-				'<input type="text" autodisable ng-model="foo" />'+
-				'<button type="submit" autodisable>OK</button>'+
+		it('should unlock the child nodes when the parent is unlocked', inject(function() {
+			var template = '<form autodisable ng-submit="onsubmit()">' +
+				'<input type="text" autodisable ng-model="foo" />' +
+				'<button type="submit" autodisable>OK</button>' +
 				'</form>',
 
 				element = compile(template),
