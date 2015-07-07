@@ -58,31 +58,41 @@ describe('autodisable directive', function() {
 			form.$setDirty();
 			flush();
 
+			/**
+			 * Submit the form
+			 */
 			element.triggerHandler('submit');
 			expect(count).toBe(1);
 
 			expect(element.hasClass('autodisable')).toBe(true);
-			expect(element.hasClass('autodisable-locked')).toBe(true);
+			expect(element.hasClass('autodisable-locked')).toBe(false);
 			expect(element.hasClass('autodisable-busy')).toBe(true);
 
 			// auto locked on submit
 			expect(button.attr('disabled')).toBe('disabled');
-			expect(button.hasClass('autodisable-locked')).toBe(true);
+			expect(button.hasClass('autodisable-locked')).toBe(false);
 			expect(button.hasClass('autodisable-busy')).toBe(true);
 
 			// inputs are locked as well
 			expect(input.attr('disabled')).toBe('disabled');
-			expect(input.hasClass('autodisable-locked')).toBe(true);
+			expect(input.hasClass('autodisable-locked')).toBe(false);
 			expect(input.hasClass('autodisable-busy')).toBe(true);
 
+			/**
+			 * Another submission must be ignored
+			 */
 			element.triggerHandler('submit');
 			expect(count).toBe(1);
 
 			deferred.resolve();
 			flush();
 
+			/**
+			 * The promise is now resolved. Unlock the form
+			 */
 			expect(element.hasClass('autodisable')).toBe(true);
 			expect(element.hasClass('autodisable-locked')).toBe(false);
+			expect(element.hasClass('autodisable-busy')).toBe(false);
 
 			// unlocked when the submission ends
 			expect(button.attr('disabled')).not.toBe('disabled');

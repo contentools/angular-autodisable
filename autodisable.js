@@ -19,7 +19,7 @@ angular.module('angular-autodisable', []);
 		};
 
 		function compiler(element, attrs) {
-			var autoDisable = new AutoDisable(element, attrs);
+			var autoDisable = new AutoDisable(element, attrs, attrs.autodisable);
 			return autoDisable.link.bind(autoDisable);
 		}
 	}
@@ -38,15 +38,14 @@ angular.module('angular-autodisable', []);
 
 		CLS_AUTODISABLE = 'autodisable',
 		CLS_LOCKED = 'autodisable-locked',
-		CLS_BUSY = 'autodisable-busy',
-		CLS_UNLOCKED = 'autodisable-unlocked';
+		CLS_BUSY = 'autodisable-busy';
 
 	/**
 	 * @factory
 	 */
 	function AutoDisableFactory($parse) {
 		/* jshint validthis: true */
-		function AutoDisable(element, attrs) {
+		function AutoDisable(element, attrs, options) {
 			var tagName = String(element && element[0] && element[0].tagName || ''),
 				type = attrs.type || '',
 				isSubmit = type === 'submit',
@@ -54,11 +53,12 @@ angular.module('angular-autodisable', []);
 				isButton = TAG_BUTTON.test(tagName),
 				isForm = TAG_FORM.test(tagName);
 
+			this.options = options;
 			this.type = type;
 
-			this.isButton = isSubmit && (isButton || isInput);
+			this.isSubmit = isSubmit && (isButton || isInput);
 			this.isForm = isForm;
-			this.isInput = !isButton && !isForm;
+			this.isInput = !isForm;
 
 			this.onClick = !!attrs.ngClick;
 			this.onSubmit = !!attrs.ngSubmit;
@@ -69,167 +69,205 @@ angular.module('angular-autodisable', []);
 			link: link,
 			lock: lock,
 			unlock: unlock,
-			busy: busy,
+			busyLock: busyLock,
+			busyUnlock: busyUnlock,
 			initialize: initialize
 		};
 
 		function initialize() {
+			// listen to ng-submit
 			if (this.isForm && this.onSubmit) {
 				bindEvent(this, 'submit');
-				bindFormState(this);
-				return;
 			}
 
-			if (this.isButton && this.onClick) {
+			// listen to ng-click on submit button
+			if (this.isSubmit && this.onClick) {
 				bindEvent(this, 'click');
-				bindChildState(this);
-				return;
 			}
 
-			bindChildState(this);
+			if (this.isForm) {
+				bindFormState(this);
+			} else {
+				bindChildState(this);
+			}
 		}
 
 		function link($scope, $element, $attrs, controllers) {
-			var form = this.isForm ? controllers[0] : controllers[1];
-			form.$busy = form.$locked = false;
+			var form = this.isForm ? controllers[0] : controllers[1],
+				options = this.options;
 
-			this.context = {
+			form.$busy = form.$disabled = false;
+
+			angular.extend(this, {
 				scope: $scope,
 				element: $element,
 				attrs: $attrs,
-				form: form
-			};
+				form: form,
+				options: angular.isString(options) && $scope.$eval(options) || {}
+			});
 
 			$element.addClass(CLS_AUTODISABLE);
 
 			this.initialize();
 		}
 
-		function busy(promise) {
-			var context = this.context,
-				self = this;
+		function busyLock(promise) {
+			var self = this;
 
-			if (context.promise) return;
+			if (self.promise) return;
 
-			self.lock();
-			context.element.addClass(CLS_BUSY);
+			self.element.addClass(CLS_BUSY);
 
-			if (self.isForm) {
-				context.form.$busy = true;
+			// at form or submit button, bind to promise
+			// otherwise, just lock the field
+			if (promise) {
+				self.promise = promise.finally(function() {
+					self.busyUnlock();
+				});
 			}
 
-			if (promise) {
-				context.promise = promise.finally(function() {
-					self.unlock();
-					context.element.removeClass(CLS_BUSY);
-					context.promise = null;
-
-					if (self.isForm) {
-						context.form.$busy = false;
-					}
-				});
+			if (this.isForm) {
+				setFormBusy(self, true);
+			} else {
+				setInputDisable(self, true);
 			}
 		}
 
-		function lock() {
-			var context = this.context;
-
-			if (context.locked) return;
-
-			context.locked = true;
-			context.element.addClass(CLS_LOCKED).removeClass(CLS_UNLOCKED);
+		function busyUnlock() {
+			this.element.removeClass(CLS_BUSY);
+			this.promise = null;
 
 			if (this.isForm) {
-				context.form.$locked = true;
-			} else if (this.isButton || context.form.$busy) {
-				context.attrs.$set('disabled', true);
+				setFormBusy(this, false);
+			} else {
+				setInputDisable(this, false);
+			}
+		}
+
+		function setFormBusy(self, value) {
+			self.form.$busy = value;
+			setFormDisable(self, value);
+		}
+
+		// function setFieldBusy(self, value) {
+		// setInputDisable(self, value);
+		// }
+
+		function lock() {
+			if (this.locked) return;
+
+			this.locked = true;
+			this.element.addClass(CLS_LOCKED);
+
+			if (this.isForm) {
+				setFormDisable(this, true);
+			} else if (this.isSubmit) {
+				setInputDisable(this, true);
+			} else {
+				setInputDisable(this, false);
 			}
 		}
 
 		function unlock() {
-			var context = this.context;
+			if (!this.locked) return;
 
-			if (!context.locked) return;
-
-			context.locked = false;
-			context.element
-				.addClass(CLS_UNLOCKED)
-				.removeClass(CLS_LOCKED)
-				.removeClass(CLS_BUSY);
+			this.locked = false;
+			this.element.removeClass(CLS_LOCKED);
 
 			if (this.isForm) {
-				context.form.$locked = false;
+				setFormDisable(this, false);
 			} else {
-				context.attrs.$set('disabled', false);
+				setInputDisable(this, false);
 			}
+		}
+
+		function setFormDisable(self, value) {
+			self.form.$disabled = value;
+		}
+
+		function setInputDisable(self, value) {
+			self.attrs.$set('disabled', value);
 		}
 
 		// helper functions
 		function bindEvent(self, eventName) {
 			var attributeName = 'ng' + eventName.charAt(0).toUpperCase() + eventName.slice(1),
-				ctx = self.context,
-				fn = $parse(ctx.attrs[attributeName], /* interceptorFn */ null, /* expensiveChecks */ true);
+				fn = $parse(self.attrs[attributeName], /* interceptorFn */ null, /* expensiveChecks */ true);
 
-			ctx.element.unbind(eventName).bind(eventName, handler);
+			self.element.unbind(eventName).bind(eventName, handler);
 
 			function handler($event) {
-				if (ctx.locked) return;
+				if (self.locked || self.promise) return;
 
-				var result = fn(ctx.scope, {
+				var result = fn(self.scope, {
 					$event: $event
 				});
 
 				if (isPromise(result)) {
-					self.busy(result);
+					self.busyLock(result);
 				}
 
-				ctx.scope.$apply();
+				self.scope.$apply();
 			}
 		}
 
 		function bindStateTrigger(self, watcher, trigger) {
-			var ctx = self.context,
-				form = ctx.form || false;
-
+			var form = self.form || false;
 			if (!form) return;
-
-			ctx.scope.$watch(watcher, trigger);
+			self.scope.$watch(watcher, trigger);
 		}
 
+		/**
+		 * Lock/unlock the form
+		 */
 		function bindFormState(self) {
-			var form = self.context.form;
+			var form = self.form;
 			bindStateTrigger(self, isInvalid, updateLockOnForm);
 
 			function isInvalid() {
-				return Boolean(form.$pristine || form.$invalid);
+				return form.$pristine +''+ form.$invalid;
 			}
 
-			function updateLockOnForm(invalid) {
-				if (invalid) {
+			function updateLockOnForm() {
+				if (
+					(form.$pristine && self.options.pristine !== false) ||
+					(form.$invalid && self.options.invalid !== false)
+				) {
 					self.lock();
-				} else {
-					self.unlock();
+					return;
 				}
+
+				self.unlock();
 			}
 		}
 
 		function bindChildState(self) {
-			var form = self.context.form;
-			bindStateTrigger(self, isFormLocked, updateChildLock);
+			var form = self.form;
 
-			function isFormLocked() {
-				return Number(form.$locked) + Number(form.$busy);
+			bindStateTrigger(self, isFormDisabled, updateChildDisabled);
+			bindStateTrigger(self, isFormBusy, updateChildBusy);
+
+			function isFormDisabled() {
+				return form.$disabled;
 			}
 
-			function updateChildLock() {
-				if (form.$busy) {
-					return self.busy();
-				}
+			function isFormBusy() {
+				return form.$busy;
+			}
 
-				if (form.$locked) {
+			function updateChildDisabled() {
+				if (form.$disabled && !form.$busy) {
 					self.lock();
 				} else {
 					self.unlock();
+				}
+			}
+
+			function updateChildBusy() {
+				if (form.$busy) {
+					self.busyLock();
+				} else {
+					self.busyUnlock();
 				}
 			}
 		}

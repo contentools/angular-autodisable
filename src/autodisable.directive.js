@@ -18,7 +18,7 @@
 		};
 
 		function compiler(element, attrs) {
-			var autoDisable = new AutoDisable(element, attrs);
+			var autoDisable = new AutoDisable(element, attrs, attrs.autodisable);
 			return autoDisable.link.bind(autoDisable);
 		}
 	}
