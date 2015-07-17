@@ -8,12 +8,16 @@
 
 		CLS_AUTODISABLE = 'autodisable',
 		CLS_LOCKED = 'autodisable-locked',
-		CLS_BUSY = 'autodisable-busy';
+		CLS_BUSY = 'autodisable-busy',
+
+		baseConfig = {
+			lockOnComplete: true
+		};
 
 	/**
 	 * @factory
 	 */
-	function AutoDisableFactory($parse) {
+	function AutoDisableFactory($parse, $q) {
 		/* jshint validthis: true */
 		function AutoDisable(element, attrs, options) {
 			var tagName = String(element && element[0] && element[0].tagName || ''),
@@ -91,8 +95,12 @@
 			// at form or submit button, bind to promise
 			// otherwise, just lock the field
 			if (promise) {
-				self.promise = promise.finally(function() {
-					self.busyUnlock();
+				self.promise = promise.then(function(response) {
+					self.busyUnlock(true);
+					return response;
+				}, function(error) {
+					self.busyUnlock(false);
+					return $q.reject(error);
 				});
 			}
 
@@ -103,12 +111,16 @@
 			}
 		}
 
-		function busyUnlock() {
+		function busyUnlock(success) {
 			this.element.removeClass(CLS_BUSY);
 			this.promise = null;
 
 			if (this.isForm) {
 				setFormBusy(this, false);
+
+				if (success && baseConfig.lockOnComplete) {
+					this.form.$setPristine();
+				}
 			} else {
 				setInputDisable(this, false);
 			}
@@ -118,10 +130,6 @@
 			self.form.$busy = value;
 			setFormDisable(self, value);
 		}
-
-		// function setFieldBusy(self, value) {
-		// setInputDisable(self, value);
-		// }
 
 		function lock() {
 			if (this.locked) return;
@@ -195,7 +203,7 @@
 			bindStateTrigger(self, isInvalid, updateLockOnForm);
 
 			function isInvalid() {
-				return form.$pristine +''+ form.$invalid;
+				return form.$pristine + '' + form.$invalid;
 			}
 
 			function updateLockOnForm() {
@@ -250,6 +258,11 @@
 		return AutoDisable;
 	}
 
-	module.factory('AutoDisable', ['$parse', AutoDisableFactory]);
+	module.provider('AutoDisable', function() {
+		this.$get = ['$parse', '$q', AutoDisableFactory];
+		this.config = function(config) {
+			angular.extend(baseConfig, config);
+		};
+	});
 
 })(angular.module('angular-autodisable'));
