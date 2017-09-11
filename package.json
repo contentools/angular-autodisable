@@ -2,7 +2,7 @@
   "name": "autodisable",
   "version": "0.3.0",
   "description": "Autodisable buttons and form fields on submit",
-  "main": "index.js",
+  "main": "autodisable.js",
   "scripts": {
     "test": "make test"
   },
