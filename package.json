@@ -1,6 +1,6 @@
 {
   "name": "autodisable",
-  "version": "0.3.0",
+  "version": "0.3.1",
   "description": "Autodisable buttons and form fields on submit",
   "main": "autodisable.js",
   "scripts": {
